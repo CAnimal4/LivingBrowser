@@ -1,0 +1,14 @@
+.DS_Store
+node_modules/
+dist/
+test-results/
+playwright-report/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+living-browser.sqlite
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
