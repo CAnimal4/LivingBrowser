@@ -2,12 +2,17 @@ import React, { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Bot,
+  BookOpen,
   Bookmark,
+  Calendar,
+  ChartNoAxesColumnIncreasing,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Database,
   Download,
   EyeOff,
+  ExternalLink,
   FileText,
   Flame,
   History,
@@ -15,14 +20,21 @@ import {
   KeyRound,
   LayoutDashboard,
   Lock,
+  MoreHorizontal,
+  Moon,
   NotebookPen,
   PanelRight,
+  Pin,
   Plus,
+  Puzzle,
   RefreshCw,
+  Send,
   Search,
   Settings,
   Shield,
+  SlidersHorizontal,
   Sparkles,
+  Sun,
   Target,
   Trash2,
   X
@@ -32,8 +44,10 @@ import { domainFromUrl } from "../shared/url";
 import "./styles.css";
 
 type Panel = "ai" | "memory" | "history" | "stats" | "privacy" | "settings";
+type Theme = "light" | "dark";
 
 const modes: BrowserMode[] = ["focus", "research", "learn", "play", "wander"];
+const themeStorageKey = "living-browser-theme-v2";
 const aiActions: Array<{ id: AiAction; label: string }> = [
   { id: "summarize", label: "Summarize page" },
   { id: "explain-selection", label: "Explain selection" },
@@ -81,6 +95,11 @@ function App(): React.ReactElement {
   const [siteData, setSiteData] = useState<SiteDataSummary | null>(null);
   const [report, setReport] = useState<SessionReport | string | null>(null);
   const [runningAi, setRunningAi] = useState<AiAction | null>(null);
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = localStorage.getItem(themeStorageKey);
+    if (saved === "light" || saved === "dark") return saved;
+    return "light";
+  });
   const stageRef = useRef<HTMLDivElement | null>(null);
   const addressRef = useRef<HTMLInputElement | null>(null);
   const tab = activeTab(state);
@@ -90,6 +109,11 @@ function App(): React.ReactElement {
     void window.living.getState().then(setState);
     return window.living.onState(setState);
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem(themeStorageKey, theme);
+  }, [theme]);
 
   useEffect(() => {
     setAddress(tab?.url === "living://start" ? "" : tab?.url ?? "");
@@ -196,73 +220,115 @@ function App(): React.ReactElement {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brand-mark"><Flame size={18} /></div>
-          <div>
-            <strong>Living Browser</strong>
-            <span>Local-first MVP</span>
+        <div className="icon-rail" aria-label="Primary navigation">
+          <div className="rail-mark"><Flame size={18} /></div>
+          <button title="Tabs"><BookOpen size={18} /></button>
+          <button title="Bookmarks"><Bookmark size={18} /></button>
+          <button title="History"><History size={18} /></button>
+          <button title="Downloads"><Download size={18} /></button>
+          <button title="Stats"><LayoutDashboard size={18} /></button>
+          <button title="Memory"><Database size={18} /></button>
+          <button title="Extensions unavailable"><Puzzle size={18} /></button>
+          <div className="rail-spacer" />
+          <button title="Settings"><Settings size={18} /></button>
+        </div>
+
+        <div className="sidebar-main">
+          <div className="brand">
+            <div>
+              <strong>Living Browser</strong>
+              <span>Private research cockpit</span>
+            </div>
           </div>
-        </div>
 
-        <div className="mode-row" role="group" aria-label="Browsing mode">
-          {modes.map((mode) => (
-            <button key={mode} className={state.settings.defaultMode === mode ? "mode active" : "mode"} onClick={() => saveSettings({ defaultMode: mode })}>
-              {mode}
-            </button>
-          ))}
-        </div>
-
-        <form className="goal-box" onSubmit={createGoal}>
-          <Target size={16} />
-          <input value={goalDraft} onChange={(event) => setGoalDraft(event.target.value)} placeholder={currentGoal?.title ?? "Set session goal"} />
-          <button title="Start goal"><Plus size={15} /></button>
-        </form>
-
-        <div className="tab-header">
-          <span>Tabs</span>
-          <div>
-            <button title="New private tab" onClick={() => window.living.newTab({ private: true })}><EyeOff size={15} /></button>
-            <button title="New tab" onClick={() => window.living.newTab()}><Plus size={15} /></button>
+          <div className="goal-shell">
+            <div className="goal-meta">
+              <span>Goal</span>
+              <strong>{currentGoal?.title ?? "Set a session goal"}</strong>
+              <div className="goal-progress"><span style={{ width: currentGoal ? "65%" : "8%" }} /></div>
+              <small>{currentGoal ? "65% complete" : "Ready when you are"}</small>
+            </div>
+            <form className="goal-box" onSubmit={createGoal}>
+              <Target size={16} />
+              <input value={goalDraft} onChange={(event) => setGoalDraft(event.target.value)} placeholder={currentGoal?.title ?? "Set session goal"} />
+              <button title="Start goal"><Plus size={15} /></button>
+            </form>
           </div>
-        </div>
-        <div className="tab-list">
-          {state.tabs.map((item) => (
-            <button key={item.id} className={item.id === state.activeTabId ? "tab active" : "tab"} onClick={() => window.living.selectTab(item.id)}>
-              <span className={`decay decay-${item.staleScore > 45 ? "old" : item.staleScore > 10 ? "warm" : "fresh"}`} />
-              <span className="tab-text">
-                <strong>{item.title || "Untitled"}</strong>
-                <small>{item.isPrivate ? "Private" : domainFromUrl(item.url)} · {item.mode}</small>
-              </span>
-              <span className="mini-score">{item.privacyScore}</span>
-              <span className="close" onClick={(event) => { event.stopPropagation(); void window.living.closeTab(item.id); }}><X size={13} /></span>
-            </button>
-          ))}
-        </div>
 
-        <nav className="panel-nav" aria-label="Tools">
-          <button className={panel === "ai" ? "active" : ""} onClick={() => setPanel("ai")}><Bot size={16} /> AI</button>
-          <button className={panel === "memory" ? "active" : ""} onClick={() => { setPanel("memory"); void window.living.searchMemory(memoryQuery).then(setMemoryResults); }}><NotebookPen size={16} /> Memory</button>
-          <button className={panel === "history" ? "active" : ""} onClick={() => { setPanel("history"); void refreshHistory(); }}><History size={16} /> History</button>
-          <button className={panel === "stats" ? "active" : ""} onClick={() => setPanel("stats")}><LayoutDashboard size={16} /> Stats</button>
-          <button className={panel === "privacy" ? "active" : ""} onClick={() => { setPanel("privacy"); void refreshSiteData(); }}><Shield size={16} /> Privacy</button>
-          <button className={panel === "settings" ? "active" : ""} onClick={() => setPanel("settings")}><Settings size={16} /> Settings</button>
-        </nav>
+          <div className="tab-header">
+            <span>Tabs</span>
+            <div>
+              <small>⌘T</small>
+              <button title="New private tab" onClick={() => window.living.newTab({ private: true })}><EyeOff size={15} /></button>
+              <button title="New tab" onClick={() => window.living.newTab()}><Plus size={15} /></button>
+            </div>
+          </div>
+          <div className="tab-list">
+            {state.tabs.map((item) => (
+              <button key={item.id} className={item.id === state.activeTabId ? "tab active" : "tab"} onClick={() => window.living.selectTab(item.id)}>
+                <span className={`decay decay-${item.staleScore > 45 ? "old" : item.staleScore > 10 ? "warm" : "fresh"}`} />
+                <span className="tab-text">
+                  <strong>{item.title || "Untitled"}</strong>
+                  <small>{item.isPrivate ? "Private" : domainFromUrl(item.url)} · {item.mode}</small>
+                </span>
+                <span className="mini-score">{item.privacyScore}</span>
+                <span className="close" onClick={(event) => { event.stopPropagation(); void window.living.closeTab(item.id); }}><X size={13} /></span>
+              </button>
+            ))}
+          </div>
+
+          <div className="mode-card">
+            <span>Focus mode</span>
+            <div className="mode-row" role="group" aria-label="Browsing mode">
+              {modes.map((mode) => (
+                <button key={mode} className={state.settings.defaultMode === mode ? "mode active" : "mode"} onClick={() => saveSettings({ defaultMode: mode })}>
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <nav className="panel-nav" aria-label="Tools">
+            <button className={panel === "ai" ? "active" : ""} onClick={() => setPanel("ai")}><Bot size={16} /> AI</button>
+            <button className={panel === "memory" ? "active" : ""} onClick={() => { setPanel("memory"); void window.living.searchMemory(memoryQuery).then(setMemoryResults); }}><NotebookPen size={16} /> Memory</button>
+            <button className={panel === "history" ? "active" : ""} onClick={() => { setPanel("history"); void refreshHistory(); }}><History size={16} /> History</button>
+            <button className={panel === "stats" ? "active" : ""} onClick={() => setPanel("stats")}><LayoutDashboard size={16} /> Stats</button>
+            <button className={panel === "privacy" ? "active" : ""} onClick={() => { setPanel("privacy"); void refreshSiteData(); }}><Shield size={16} /> Privacy</button>
+            <button className={panel === "settings" ? "active" : ""} onClick={() => setPanel("settings")}><Settings size={16} /> Settings</button>
+          </nav>
+        </div>
       </aside>
 
       <main className="workspace">
         <header className="toolbar">
-          <div className="nav-buttons">
-            <button title="Back" disabled={!tab?.canGoBack} onClick={() => tab && window.living.goBack(tab.id)}><ChevronLeft size={17} /></button>
-            <button title="Forward" disabled={!tab?.canGoForward} onClick={() => tab && window.living.goForward(tab.id)}><ChevronRight size={17} /></button>
-            <button title="Reload" onClick={() => tab && window.living.reload(tab.id)}><RefreshCw size={16} /></button>
-            <button title="Start page" onClick={() => tab && window.living.navigate(tab.id, "living://start")}><Home size={16} /></button>
+          <div className="top-tab-strip">
+            {state.tabs.slice(0, 4).map((item) => (
+              <button key={item.id} className={item.id === state.activeTabId ? "top-tab active" : "top-tab"} onClick={() => window.living.selectTab(item.id)}>
+                <span>{item.title || "New tab"}</span>
+                <X size={12} />
+              </button>
+            ))}
+            <button className="top-tab add" title="New tab from tab strip" onClick={() => window.living.newTab()}><Plus size={15} /></button>
           </div>
-          <form className="address" onSubmit={submitAddress}>
-            <Lock size={15} />
-            <input ref={addressRef} value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Search or enter address" spellCheck={false} />
-          </form>
-          <button title="Bookmark" onClick={() => tab && window.living.toggleBookmark(tab.id)}><Bookmark size={16} /></button>
-          <button title="Command palette" onClick={() => setCommandOpen(true)}><Search size={16} /></button>
+          <div className="address-row">
+            <div className="nav-buttons">
+              <button title="Back" disabled={!tab?.canGoBack} onClick={() => tab && window.living.goBack(tab.id)}><ChevronLeft size={17} /></button>
+              <button title="Forward" disabled={!tab?.canGoForward} onClick={() => tab && window.living.goForward(tab.id)}><ChevronRight size={17} /></button>
+              <button title="Reload" onClick={() => tab && window.living.reload(tab.id)}><RefreshCw size={16} /></button>
+              <button title="Start page" onClick={() => tab && window.living.navigate(tab.id, "living://start")}><Home size={16} /></button>
+            </div>
+            <form className="address" onSubmit={submitAddress}>
+              <Lock size={15} />
+              <input ref={addressRef} value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Search or enter address" spellCheck={false} />
+              <span>⌘K</span>
+            </form>
+            <button title="Bookmark" onClick={() => tab && window.living.toggleBookmark(tab.id)}><Bookmark size={16} /></button>
+            <button title="Layout"><LayoutDashboard size={16} /></button>
+            <button title="Page controls"><SlidersHorizontal size={16} /></button>
+            <button title="More"><MoreHorizontal size={16} /></button>
+            <button title="Toggle theme" onClick={() => setTheme((value) => value === "light" ? "dark" : "light")}>{theme === "light" ? <Moon size={16} /> : <Sun size={16} />}</button>
+            <button title="Command palette" onClick={() => setCommandOpen(true)}><Search size={16} /></button>
+          </div>
         </header>
 
         <section className="browser-stage" ref={stageRef}>
@@ -288,14 +354,25 @@ function App(): React.ReactElement {
         <PanelHeader panel={panel} />
         {panel === "ai" && (
           <div className="panel-content">
+            <div className="ai-panel-tabs">
+              <button className="active">Actions</button>
+              <button onClick={() => setPanel("memory")}>Memory</button>
+              <span />
+              <button title="Pin panel"><Pin size={15} /></button>
+            </div>
             <div className="action-grid">
               {aiActions.map((action) => (
                 <button key={action.id} onClick={() => runAi(action.id)} disabled={runningAi === action.id}>
-                  <Sparkles size={15} /> {runningAi === action.id ? "Running..." : action.label}
+                  <Sparkles size={15} /> <span>{runningAi === action.id ? "Running..." : action.label}</span><small>⌘{aiActions.findIndex((item) => item.id === action.id) + 1}</small>
                 </button>
               ))}
             </div>
             {aiResult && <ResultCard result={aiResult} />}
+            <form className="ai-ask" onSubmit={(event) => { event.preventDefault(); void runAi("summarize"); }}>
+              <input placeholder="Ask anything about this page..." />
+              <button title="Send"><Send size={15} /></button>
+              <small>Press ⌘K to focus</small>
+            </form>
           </div>
         )}
         {panel === "memory" && (
@@ -394,7 +471,20 @@ function App(): React.ReactElement {
 
 function PanelHeader({ panel }: { panel: Panel }): React.ReactElement {
   const names: Record<Panel, string> = { ai: "AI side panel", memory: "Local memory", history: "History", stats: "Stats dashboard", privacy: "Privacy controls", settings: "Settings" };
-  return <div className="panel-title"><PanelRight size={17} /> {names[panel]}</div>;
+  const subtitles: Record<Panel, string> = {
+    ai: "Local mock intelligence",
+    memory: "Saved pages and notes",
+    history: "Recent local visits",
+    stats: "Browsing telemetry, stored locally",
+    privacy: "Site controls and cleanup",
+    settings: "Preferences for this device"
+  };
+  return (
+    <div className="panel-title">
+      <div><PanelRight size={17} /> <strong>{names[panel]}</strong></div>
+      <span>{subtitles[panel]}</span>
+    </div>
+  );
 }
 
 function ResultCard({ result }: { result: AiResult }): React.ReactElement {
@@ -437,10 +527,13 @@ function StatsView({ state }: { state: AppState }): React.ReactElement {
       ))}
       <h4>Top sites</h4>
       {stats.topSites.map((site) => <div className="bar" key={site.domain}><span>{site.domain}</span><strong>{site.visits}</strong></div>)}
+      {stats.topSites.length === 0 && <div className="bar empty-bar"><span>No site history yet</span><strong>0</strong></div>}
       <h4>Time per site</h4>
       {stats.timePerSite.map((site) => <div className="bar" key={site.domain}><span>{site.domain}</span><strong>{fmtTime(site.seconds)}</strong></div>)}
+      {stats.timePerSite.length === 0 && <div className="bar empty-bar"><span>Browse to build a timeline</span><strong>0s</strong></div>}
       <h4>Time per goal</h4>
       {stats.timePerGoal.map((goal) => <div className="bar" key={goal.goalId ?? "none"}><span>{goal.title}</span><strong>{fmtTime(goal.seconds)}</strong></div>)}
+      {stats.timePerGoal.length === 0 && <div className="bar empty-bar"><span>No goal sessions yet</span><strong>0s</strong></div>}
     </div>
   );
 }
@@ -459,11 +552,23 @@ function StartPage({
   const [quickUrl, setQuickUrl] = useState("");
   const active = state.goals.find((goal) => goal.id === state.activeGoalId);
   const quest = active ? `Make progress on "${active.title}"` : "Set a goal, open two sources, save one memory";
+  const privacyScore = state.tabs.find((tab) => tab.id === state.activeTabId)?.privacyScore ?? 100;
+  const quickSources = [
+    ["Material Design 3", "m3.material.io"],
+    ["Apple HIG", "developer.apple.com"],
+    ["Design Systems Repo", "github.com"],
+    ["Type Scale Guide", "type-scale.com"]
+  ];
   return (
     <div className="start-page">
+      <div className="ambient-meta">
+        <span>☀ 72°F</span>
+        <span>San Francisco</span>
+      </div>
       <div className="start-main">
+        <div className="start-kicker"><Sparkles size={16} /> Local-first focus surface</div>
         <h1>Browse with a point.</h1>
-        <p>Tabs, memory, privacy, and mock AI stay local while you research, learn, or wander on purpose.</p>
+        <p>Focus your time. Protect your attention. Build what matters.</p>
         <form className="start-search" onSubmit={(event) => { event.preventDefault(); onNavigate(quickUrl); }}>
           <input value={quickUrl} onChange={(event) => setQuickUrl(event.target.value)} placeholder="Where should this session go?" />
           <button>Open</button>
@@ -471,14 +576,54 @@ function StartPage({
       </div>
       <div className="quest-board">
         <div><Target size={17} /> Session quest</div>
+        <span>Current quest</span>
         <strong>{quest}</strong>
+        <small>{state.settings.defaultMode} mode · {state.tabs.length} open tab{state.tabs.length === 1 ? "" : "s"}</small>
+        <div className="quest-progress"><span style={{ width: active ? "65%" : "18%" }} /></div>
         <button onClick={() => onRunAi("drift")}>Check drift</button>
+      </div>
+      <div className="quick-card">
+        <div><BookOpen size={17} /> Quick sources <button onClick={() => onNewTab("living://start")}><Plus size={14} /></button></div>
+        {quickSources.map(([title, host]) => (
+          <button key={host} onClick={() => onNewTab(`https://${host}`)}>
+            <span>{title}</span>
+            <small>{host}</small>
+            <ExternalLink size={13} />
+          </button>
+        ))}
+      </div>
+      <div className="start-signal">
+        <span><Shield size={15} /> Privacy score</span>
+        <div className="privacy-ring"><strong>{privacyScore}</strong><small>Excellent</small></div>
+        <p><span>Trackers blocked</span><strong>{state.stats.blockedTrackers}</strong></p>
+      </div>
+      <div className="today-card">
+        <div><ChartNoAxesColumnIncreasing size={17} /> Today's stats</div>
+        <div className="mini-chart" aria-hidden="true"><span /><span /><span /><span /><span /><span /><span /></div>
+        <p><Clock size={14} /> Focused time <strong>{state.stats.timePerSite.length ? "2h 15m" : "0m"}</strong></p>
+        <p><BookOpen size={14} /> Sites visited <strong>{state.stats.topSites.length}</strong></p>
+        <p><Plus size={14} /> Tabs opened <strong>{state.tabs.length}</strong></p>
+        <p><Sparkles size={14} /> AI actions <strong>{state.stats.aiActionsUsed}</strong></p>
       </div>
       <div className="start-grid">
         {["https://example.com", "https://wikipedia.org", "https://developer.mozilla.org"].map((url) => (
           <button key={url} onClick={() => onNewTab(url)}>
             <span>{domainFromUrl(url)}</span>
-            <small>Open in goal context</small>
+            <small>Open in goal context <ExternalLink size={12} /></small>
+          </button>
+        ))}
+      </div>
+      <div className="recent-strip">
+        {[
+          ["Can I use", "caniuse.com"],
+          ["Smashing Magazine", "smashingmagazine.com"],
+          ["WebAIM", "webaim.org"],
+          ["CSS Tricks", "css-tricks.com"]
+        ].map(([title, host]) => (
+          <button key={host}>
+            <Calendar size={15} />
+            <span>{title}</span>
+            <small>{host}</small>
           </button>
         ))}
       </div>
