@@ -23,6 +23,8 @@ import {
   MoreHorizontal,
   Moon,
   NotebookPen,
+  PanelLeftClose,
+  PanelLeftOpen,
   PanelRight,
   Pin,
   Plus,
@@ -43,21 +45,22 @@ import type { AiAction, AiResult, AppSettings, AppState, BrowserMode, BrowserTab
 import { domainFromUrl } from "../shared/url";
 import "./styles.css";
 
-type Panel = "ai" | "memory" | "history" | "stats" | "privacy" | "settings";
+type Panel = "ai" | "memory" | "history" | "stats" | "privacy" | "settings" | "bookmarks" | "downloads";
 type Theme = "light" | "dark";
+type AiPanelTab = "actions" | "memory";
 
 const modes: BrowserMode[] = ["focus", "research", "learn", "play", "wander"];
 const themeStorageKey = "living-browser-theme-v2";
 const aiActions: Array<{ id: AiAction; label: string }> = [
-  { id: "summarize", label: "Summarize page" },
-  { id: "explain-selection", label: "Explain selection" },
+  { id: "summarize", label: "Summarize this page" },
+  { id: "explain-selection", label: "Explain selected text" },
   { id: "todos", label: "Extract todos" },
-  { id: "claims", label: "Key claims" },
-  { id: "compare-tabs", label: "Compare tabs" },
-  { id: "study-notes", label: "Study notes" },
-  { id: "flashcards", label: "Flashcards" },
-  { id: "dark-patterns", label: "Dark patterns" },
-  { id: "drift", label: "Off-goal drift" }
+  { id: "claims", label: "Extract key points" },
+  { id: "compare-tabs", label: "Compare open tabs" },
+  { id: "study-notes", label: "Generate study notes" },
+  { id: "flashcards", label: "Generate flashcards" },
+  { id: "dark-patterns", label: "Detect dark patterns" },
+  { id: "drift", label: "Check off-goal browsing" }
 ];
 
 const emptyState: AppState = {
@@ -91,10 +94,13 @@ function App(): React.ReactElement {
   const [memoryResults, setMemoryResults] = useState<MemoryItem[]>([]);
   const [historyQuery, setHistoryQuery] = useState("");
   const [history, setHistory] = useState<HistoryVisit[]>([]);
+  const [downloads, setDownloads] = useState<Array<{ id: number; url: string; filename: string; state: string; startedAt: number; completedAt: number | null }>>([]);
   const [aiResult, setAiResult] = useState<AiResult | null>(null);
+  const [aiPanelTab, setAiPanelTab] = useState<AiPanelTab>("actions");
   const [siteData, setSiteData] = useState<SiteDataSummary | null>(null);
   const [report, setReport] = useState<SessionReport | string | null>(null);
   const [runningAi, setRunningAi] = useState<AiAction | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<Theme>(() => {
     const saved = localStorage.getItem(themeStorageKey);
     if (saved === "light" || saved === "dark") return saved;
@@ -118,7 +124,7 @@ function App(): React.ReactElement {
   useEffect(() => {
     setAddress(tab?.url === "living://start" ? "" : tab?.url ?? "");
     if (tab && panel === "privacy") void refreshSiteData(tab.id);
-  }, [tab?.id, tab?.url, panel]);
+  }, [tab?.id, tab?.url, panel, sidebarCollapsed]);
 
   useEffect(() => {
     const update = () => {
@@ -157,6 +163,15 @@ function App(): React.ReactElement {
         event.preventDefault();
         void window.living.reload(tab.id);
       }
+      if (mod && /^[1-9]$/.test(event.key)) {
+        const action = aiActions[Number(event.key) - 1];
+        if (action) {
+          event.preventDefault();
+          setPanel("ai");
+          setAiPanelTab("actions");
+          void runAi(action.id);
+        }
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -164,6 +179,15 @@ function App(): React.ReactElement {
 
   async function refreshHistory(query = historyQuery): Promise<void> {
     setHistory(await window.living.listHistory(query));
+  }
+
+  async function openPanel(nextPanel: Panel): Promise<void> {
+    setPanel(nextPanel);
+    if (nextPanel === "memory") setMemoryResults(await window.living.searchMemory(memoryQuery));
+    if (nextPanel === "history") await refreshHistory();
+    if (nextPanel === "downloads") setDownloads(await window.living.listDownloads());
+    if (nextPanel === "privacy") await refreshSiteData();
+    if (sidebarCollapsed) setSidebarCollapsed(false);
   }
 
   async function refreshSiteData(tabId = tab?.id): Promise<void> {
@@ -218,19 +242,20 @@ function App(): React.ReactElement {
   }, [tab?.privacyScore]);
 
   return (
-    <div className="app-shell">
+    <div className={sidebarCollapsed ? "app-shell sidebar-collapsed" : "app-shell"}>
       <aside className="sidebar">
         <div className="icon-rail" aria-label="Primary navigation">
-          <div className="rail-mark"><Flame size={18} /></div>
-          <button title="Tabs"><BookOpen size={18} /></button>
-          <button title="Bookmarks"><Bookmark size={18} /></button>
-          <button title="History"><History size={18} /></button>
-          <button title="Downloads"><Download size={18} /></button>
-          <button title="Stats"><LayoutDashboard size={18} /></button>
-          <button title="Memory"><Database size={18} /></button>
-          <button title="Extensions unavailable"><Puzzle size={18} /></button>
+          <button className="rail-mark" title="Start page" onClick={() => tab && window.living.navigate(tab.id, "living://start")}><Flame size={18} /></button>
+          <button title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"} onClick={() => setSidebarCollapsed((value) => !value)}>{sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}</button>
+          <button title="Tabs" onClick={() => setSidebarCollapsed(false)}><BookOpen size={18} /></button>
+          <button title="Bookmarks" onClick={() => openPanel("bookmarks")}><Bookmark size={18} /></button>
+          <button title="History" onClick={() => openPanel("history")}><History size={18} /></button>
+          <button title="Downloads" onClick={() => openPanel("downloads")}><Download size={18} /></button>
+          <button title="Stats" onClick={() => openPanel("stats")}><LayoutDashboard size={18} /></button>
+          <button title="Memory" onClick={() => openPanel("memory")}><Database size={18} /></button>
+          <button title="Extensions unavailable" onClick={() => openPanel("settings")}><Puzzle size={18} /></button>
           <div className="rail-spacer" />
-          <button title="Settings"><Settings size={18} /></button>
+          <button title="Settings" onClick={() => openPanel("settings")}><Settings size={18} /></button>
         </div>
 
         <div className="sidebar-main">
@@ -289,12 +314,12 @@ function App(): React.ReactElement {
           </div>
 
           <nav className="panel-nav" aria-label="Tools">
-            <button className={panel === "ai" ? "active" : ""} onClick={() => setPanel("ai")}><Bot size={16} /> AI</button>
-            <button className={panel === "memory" ? "active" : ""} onClick={() => { setPanel("memory"); void window.living.searchMemory(memoryQuery).then(setMemoryResults); }}><NotebookPen size={16} /> Memory</button>
-            <button className={panel === "history" ? "active" : ""} onClick={() => { setPanel("history"); void refreshHistory(); }}><History size={16} /> History</button>
-            <button className={panel === "stats" ? "active" : ""} onClick={() => setPanel("stats")}><LayoutDashboard size={16} /> Stats</button>
-            <button className={panel === "privacy" ? "active" : ""} onClick={() => { setPanel("privacy"); void refreshSiteData(); }}><Shield size={16} /> Privacy</button>
-            <button className={panel === "settings" ? "active" : ""} onClick={() => setPanel("settings")}><Settings size={16} /> Settings</button>
+            <button className={panel === "ai" ? "active" : ""} onClick={() => openPanel("ai")}><Bot size={16} /> AI</button>
+            <button className={panel === "memory" ? "active" : ""} onClick={() => openPanel("memory")}><NotebookPen size={16} /> Memory</button>
+            <button className={panel === "history" ? "active" : ""} onClick={() => openPanel("history")}><History size={16} /> History</button>
+            <button className={panel === "stats" ? "active" : ""} onClick={() => openPanel("stats")}><LayoutDashboard size={16} /> Stats</button>
+            <button className={panel === "privacy" ? "active" : ""} onClick={() => openPanel("privacy")}><Shield size={16} /> Privacy</button>
+            <button className={panel === "settings" ? "active" : ""} onClick={() => openPanel("settings")}><Settings size={16} /> Settings</button>
           </nav>
         </div>
       </aside>
@@ -355,18 +380,21 @@ function App(): React.ReactElement {
         {panel === "ai" && (
           <div className="panel-content">
             <div className="ai-panel-tabs">
-              <button className="active">Actions</button>
-              <button onClick={() => setPanel("memory")}>Memory</button>
+              <button className={aiPanelTab === "actions" ? "active" : ""} onClick={() => setAiPanelTab("actions")}>Actions</button>
+              <button className={aiPanelTab === "memory" ? "active" : ""} onClick={() => { setAiPanelTab("memory"); void window.living.searchMemory(memoryQuery).then(setMemoryResults); }}>Memory</button>
               <span />
               <button title="Pin panel"><Pin size={15} /></button>
             </div>
-            <div className="action-grid">
-              {aiActions.map((action) => (
-                <button key={action.id} onClick={() => runAi(action.id)} disabled={runningAi === action.id}>
-                  <Sparkles size={15} /> <span>{runningAi === action.id ? "Running..." : action.label}</span><small>⌘{aiActions.findIndex((item) => item.id === action.id) + 1}</small>
-                </button>
-              ))}
-            </div>
+            {aiPanelTab === "actions" && (
+              <div className="action-grid">
+                {aiActions.map((action) => (
+                  <button key={action.id} onClick={() => runAi(action.id)} disabled={runningAi === action.id}>
+                    <Sparkles size={15} /> <span>{runningAi === action.id ? "Running..." : action.label}</span><small>⌘{aiActions.findIndex((item) => item.id === action.id) + 1}</small>
+                  </button>
+                ))}
+              </div>
+            )}
+            {aiPanelTab === "memory" && <ItemList items={memoryResults.map((item) => ({ title: item.title, detail: `${item.type} · ${item.text}` }))} />}
             {aiResult && <ResultCard result={aiResult} />}
             <form className="ai-ask" onSubmit={(event) => { event.preventDefault(); void runAi("summarize"); }}>
               <input placeholder="Ask anything about this page..." />
@@ -385,6 +413,18 @@ function App(): React.ReactElement {
               <button><Search size={15} /></button>
             </form>
             <ItemList items={memoryResults.map((item) => ({ title: item.title, detail: `${item.type} · ${item.text}` }))} />
+          </div>
+        )}
+        {panel === "bookmarks" && (
+          <div className="panel-content">
+            <button className="wide" onClick={() => tab && window.living.toggleBookmark(tab.id).then(() => window.living.getState().then(setState))}><Bookmark size={15} /> Toggle current bookmark</button>
+            <ItemList items={state.bookmarks.map((item) => ({ title: item.title || item.url, detail: item.url }))} />
+          </div>
+        )}
+        {panel === "downloads" && (
+          <div className="panel-content">
+            <button className="wide" onClick={() => window.living.listDownloads().then(setDownloads)}><Download size={15} /> Refresh downloads</button>
+            <ItemList items={downloads.map((item) => ({ title: item.filename || item.url, detail: `${item.state} · ${new Date(item.startedAt).toLocaleString()}` }))} />
           </div>
         )}
         {panel === "history" && (
@@ -470,14 +510,16 @@ function App(): React.ReactElement {
 }
 
 function PanelHeader({ panel }: { panel: Panel }): React.ReactElement {
-  const names: Record<Panel, string> = { ai: "AI side panel", memory: "Local memory", history: "History", stats: "Stats dashboard", privacy: "Privacy controls", settings: "Settings" };
+  const names: Record<Panel, string> = { ai: "AI side panel", memory: "Local memory", history: "History", stats: "Stats dashboard", privacy: "Privacy controls", settings: "Settings", bookmarks: "Bookmarks", downloads: "Downloads" };
   const subtitles: Record<Panel, string> = {
     ai: "Local mock intelligence",
     memory: "Saved pages and notes",
     history: "Recent local visits",
     stats: "Browsing telemetry, stored locally",
     privacy: "Site controls and cleanup",
-    settings: "Preferences for this device"
+    settings: "Preferences for this device",
+    bookmarks: "Saved local links",
+    downloads: "Local download records"
   };
   return (
     <div className="panel-title">

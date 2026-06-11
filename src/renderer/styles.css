@@ -129,6 +129,10 @@ button:focus-visible {
   transition: background 180ms ease, color 180ms ease;
 }
 
+.app-shell.sidebar-collapsed {
+  grid-template-columns: 52px minmax(430px, 1fr) 368px;
+}
+
 .sidebar,
 .right-panel,
 .toolbar,
@@ -165,6 +169,7 @@ button:focus-visible {
 }
 
 .rail-mark {
+  border: 0;
   display: grid;
   place-items: center;
   color: var(--surface);
@@ -194,6 +199,18 @@ button:focus-visible {
   flex-direction: column;
   padding: 16px 14px;
   gap: 14px;
+}
+
+.sidebar-collapsed .sidebar {
+  grid-template-columns: 52px 0;
+}
+
+.sidebar-collapsed .sidebar-main {
+  width: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .brand {

@@ -15,6 +15,10 @@ test("Living Browser launches and supports tab, goal, AI, privacy, and stats UI"
     const initialTheme = await page.evaluate(() => document.documentElement.dataset.theme);
     await page.getByTitle("Toggle theme").click();
     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.theme)).not.toBe(initialTheme);
+    await page.getByTitle("Collapse sidebar").click();
+    await expect.poll(() => page.evaluate(() => document.querySelector(".app-shell")?.classList.contains("sidebar-collapsed"))).toBe(true);
+    await page.getByTitle("Expand sidebar").click();
+    await expect.poll(() => page.evaluate(() => document.querySelector(".app-shell")?.classList.contains("sidebar-collapsed"))).toBe(false);
 
     await page.getByPlaceholder("Set session goal").fill("Check MVP");
     await page.getByTitle("Start goal").click();
@@ -23,8 +27,9 @@ test("Living Browser launches and supports tab, goal, AI, privacy, and stats UI"
     await page.getByTitle("New tab", { exact: true }).click();
     await expect(page.getByText("Tabs", { exact: true })).toBeVisible();
 
+    await page.getByPlaceholder("Search or enter address").click();
     await page.getByPlaceholder("Search or enter address").fill("https://example.com");
-    await page.getByPlaceholder("Search or enter address").press("Enter");
+    await page.keyboard.press("Enter");
     await expect.poll(() => app.evaluate(async ({ webContents }) => {
       const pageContents = webContents.getAllWebContents().find((contents) => contents.getURL().startsWith("https://example.com"));
       return pageContents?.executeJavaScript("document.body.innerText") ?? "";
@@ -33,8 +38,25 @@ test("Living Browser launches and supports tab, goal, AI, privacy, and stats UI"
 
     const tools = page.getByRole("navigation", { name: "Tools" });
     await tools.getByRole("button", { name: "AI", exact: true }).click();
-    await page.getByRole("button", { name: /Summarize page/ }).click();
-    await expect(page.getByText("Mock summary")).toBeVisible();
+    for (const label of [
+      "Summarize this page",
+      "Explain selected text",
+      "Extract todos",
+      "Extract key points",
+      "Compare open tabs",
+      "Generate study notes",
+      "Generate flashcards",
+      "Detect dark patterns",
+      "Check off-goal browsing"
+    ]) {
+      await page.getByRole("button", { name: new RegExp(label) }).click();
+      await expect(page.locator(".result-card h3")).toBeVisible();
+    }
+
+    await page.getByTitle("Bookmarks", { exact: true }).click();
+    await expect(page.locator(".panel-title strong", { hasText: "Bookmarks" })).toBeVisible();
+    await page.getByTitle("Downloads", { exact: true }).click();
+    await expect(page.locator(".panel-title strong", { hasText: "Downloads" })).toBeVisible();
 
     await tools.getByRole("button", { name: "Stats", exact: true }).click();
     await expect(page.getByText("Stats dashboard")).toBeVisible();
