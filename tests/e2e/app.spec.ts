@@ -19,6 +19,15 @@ test("Living Browser launches and supports tab, goal, AI, privacy, and stats UI"
     await page.getByTitle("New tab").click();
     await expect(page.getByText("Tabs", { exact: true })).toBeVisible();
 
+    await page.getByPlaceholder("Search or enter address").fill("https://example.com");
+    await page.keyboard.press("Enter");
+    await expect(page.getByText("Example Domain", { exact: true })).toBeVisible();
+    const embeddedPageText = await app.evaluate(async ({ webContents }) => {
+      const pageContents = webContents.getAllWebContents().find((contents) => contents.getURL() === "https://example.com/");
+      return pageContents?.executeJavaScript("document.body.innerText") ?? "";
+    });
+    expect(embeddedPageText).toContain("This domain is for use in documentation examples");
+
     await page.getByRole("button", { name: "AI", exact: true }).click();
     await page.getByRole("button", { name: /Summarize page/ }).click();
     await expect(page.getByText("Mock summary")).toBeVisible();

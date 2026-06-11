@@ -1,4 +1,4 @@
-import { app, BrowserView, BrowserWindow, DownloadItem, ipcMain, Rectangle, session, WebContents } from "electron";
+import { app, BrowserWindow, DownloadItem, ipcMain, Rectangle, session, WebContents, WebContentsView } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,7 +20,7 @@ let activeGoalId: string | null = null;
 let currentLayout: Rectangle = { x: 282, y: 86, width: 720, height: 600 };
 
 const tabs = new TabManager();
-const views = new Map<string, BrowserView>();
+const views = new Map<string, WebContentsView>();
 const blocker = new TrackerBlocker();
 const ai = new MockAiProvider();
 
@@ -85,8 +85,8 @@ function configureSession(ses: Electron.Session): void {
   });
 }
 
-function createView(tab: BrowserTab): BrowserView {
-  const view = new BrowserView({
+function createView(tab: BrowserTab): WebContentsView {
+  const view = new WebContentsView({
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -163,7 +163,7 @@ function attachActiveView(): void {
   if (!mainWindow) return;
   for (const view of views.values()) {
     try {
-      mainWindow.removeBrowserView(view);
+      mainWindow.contentView.removeChildView(view);
     } catch {
       // Ignore detached views.
     }
@@ -176,9 +176,8 @@ function attachActiveView(): void {
     views.set(active.id, view);
     void view.webContents.loadURL(active.url);
   }
-  mainWindow.addBrowserView(view);
+  mainWindow.contentView.addChildView(view);
   view.setBounds(currentLayout);
-  view.setAutoResize({ width: true, height: true });
 }
 
 function saveSession(): void {
@@ -258,7 +257,7 @@ function registerIpc(): void {
     const view = views.get(id);
     if (view && mainWindow) {
       try {
-        mainWindow.removeBrowserView(view);
+        mainWindow.contentView.removeChildView(view);
       } catch {
         // Ignore detached views.
       }
